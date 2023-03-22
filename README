@@ -1,3 +1,12 @@
+# how to develop
+```
+./configure
+make
+make install DESTDIR=$HOME/iproute2_dev
+export PATH=$HOME/iproute2_dev/sbin:$PATH
+ip a # call ip command in $HOME/iproute2_dev
+```
+
 This is a set of utilities for Linux networking.
 
 Information:
