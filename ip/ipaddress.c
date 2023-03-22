@@ -997,6 +997,7 @@ static void print_proto_down(FILE *f, struct rtattr *tb[])
 	}
 }
 
+// I/F名やMAC addressを表示
 int print_linkinfo(struct nlmsghdr *n, void *arg)
 {
 	FILE *fp = (FILE *)arg;
@@ -1020,9 +1021,16 @@ int print_linkinfo(struct nlmsghdr *n, void *arg)
 	if (filter.up && !(ifi->ifi_flags&IFF_UP))
 		return -1;
 
+	// ここでtbにrtaを埋めている
+	// rtaの実態はIFLA_RTA(ifi)となる。
 	parse_rtattr_flags(tb, IFLA_MAX, IFLA_RTA(ifi), len, NLA_F_NESTED);
 
+	// 名前の取得
+	//                           ifindex,       rtattr[4]
 	name = get_ifname_rta(ifi->ifi_index, tb[IFLA_IFNAME]);
+
+	printf("name: %s\n", name);
+	printf("name: %s\n", tb[IFLA_IFNAME]);
 	if (!name)
 		return -1;
 
@@ -1056,9 +1064,32 @@ int print_linkinfo(struct nlmsghdr *n, void *arg)
 	if (brief)
 		return print_linkinfo_brief(fp, name, ifi, tb);
 
-	print_int(PRINT_ANY, "ifindex", "%d: ", ifi->ifi_index);
 
+	// これが表示の一行目の最初の人文字目。つまりindex
+	// これはどこで定義されている？？？
+	// -> include/json_print.hでdefineされている。分かりにくい。。。
+	// 実態としては、
+	// _PRINT_FUNC(int, int)
+	// で
+	// static inline int print_int(enum output_type t, const char *key, const char *fmt, int value) {
+	// 	  return print_color_int(t, COLOR_NONE, key, fmt, value);
+	// }
+	// が生成される。
+	// つまり実態はprint_color_int()となる。
+	// この関数もlib/json_print.c:119で生成される。
+	// 最終的にはvfprintf(fp, fmt, args);が呼ばれる。
+	//             type,       key,    fmt,      int value
+	print_int(PRINT_ANY, "ifindex", "%d: ", ifi->ifi_index);
+	printf("ifindex: %d\n", ifi->ifi_index);
+	printf("ifindex: %d\n", ifi->ifi_index);
+	printf("ifindex: %d\n", ifi->ifi_index);
+	printf("ifindex: %d\n", ifi->ifi_index);
+
+
+	// link名を表示
 	m_flag = print_name_and_link("%s: ", name, tb);
+
+
 	print_link_flags(fp, ifi->ifi_flags, m_flag);
 
 	if (tb[IFLA_MTU])
@@ -1320,6 +1351,11 @@ int print_linkinfo(struct nlmsghdr *n, void *arg)
 		__print_link_stats(fp, tb);
 	}
 
+	// VFがある場合はここで表示！
+	printf("\n");
+	printf("tb[IFLA_VFINFO_LIST] %d\n", tb[IFLA_VFINFO_LIST]);
+	printf("tb[IFLA_NUM_VF] %d\n", tb[IFLA_NUM_VF]);
+	printf("\n");
 	if ((do_link || show_details) && tb[IFLA_VFINFO_LIST] && tb[IFLA_NUM_VF]) {
 		struct rtattr *i, *vflist = tb[IFLA_VFINFO_LIST];
 		int rem = RTA_PAYLOAD(vflist), count = 0;
@@ -1710,6 +1746,7 @@ brief_exit:
 	return 0;
 }
 
+// address情報を表示
 static int print_selected_addrinfo(struct ifinfomsg *ifi,
 				   struct nlmsg_list *ainfo, FILE *fp)
 {
@@ -2099,9 +2136,21 @@ static int ip_addr_list(struct nlmsg_chain *ainfo)
 	return 0;
 }
 
+// ip a表示の実態はこの関数。
 static int ipaddr_list_flush_or_save(int argc, char **argv, int action)
 {
 	struct nlmsg_chain linfo = { NULL, NULL};
+	// 実態はnlmsghdr構造体のチェーン
+	/*
+	struct nlmsghdr {
+		__u32		nlmsg_len;
+		__u16		nlmsg_type;
+		__u16		nlmsg_flags;
+		__u32		nlmsg_seq;
+		__u32		nlmsg_pid;
+	};
+	*/
+
 	struct nlmsg_chain _ainfo = { NULL, NULL}, *ainfo = &_ainfo;
 	struct nlmsg_list *l;
 	char *filter_dev = NULL;
@@ -2195,6 +2244,7 @@ static int ipaddr_list_flush_or_save(int argc, char **argv, int action)
 		}
 		argv++; argc--;
 	}
+	printf("after while\n");
 
 	if (filter_dev) {
 		filter.ifindex = ll_name_to_index(filter_dev);
@@ -2206,6 +2256,9 @@ static int ipaddr_list_flush_or_save(int argc, char **argv, int action)
 
 	if (action == IPADD_FLUSH)
 		return ipaddr_flush();
+
+
+	printf("after flush\n");
 
 	if (action == IPADD_SAVE) {
 		if (ipadd_save_prep())
@@ -2246,13 +2299,17 @@ static int ipaddr_list_flush_or_save(int argc, char **argv, int action)
 		goto out;
 	}
 
+
+	printf("linfo: %x\n", linfo);
 	if (filter.ifindex) {
 		if (ipaddr_link_get(filter.ifindex, &linfo) != 0)
 			goto out;
 	} else {
+		// ここで linfoを埋めている。これが各I/Fのエントリポイント？
 		if (ip_link_list(iplink_filter_req, &linfo) != 0)
 			goto out;
 	}
+	printf("linfo: %x\n", linfo);
 
 	if (filter.family != AF_PACKET) {
 		if (filter.oneline)
@@ -2265,17 +2322,41 @@ static int ipaddr_list_flush_or_save(int argc, char **argv, int action)
 	}
 
 	for (l = linfo.head; l; l = l->next) {
-		struct nlmsghdr *n = &l->h;
+		// ここが各I/Fの順次表示の実態。
+
+		struct nlmsghdr *n = &l->h; // linfo.head->hdrのこと。つまり、chainの最初のhdrを指している
+		/* printf("1\n"); */
+		printf("nlmsghdr hdr: %x\n", n);
+		/* printf("2\n"); */
+		/* printf("nlmsghdr hdr: %x\n", &n); */
+		/* printf("3\n"); */
+		/* printf("nlmsghdr hdr: %x\n", &n->nlmsg_type); */
+		/* printf("4\n"); */
+
 		struct ifinfomsg *ifi = NLMSG_DATA(n);
 		int res = 0;
 
 		open_json_object(NULL);
-		if (brief || !no_link)
+		if (brief || !no_link) {
+			// 文字通りlink info, つまりI/F名やmac addressなどを表示。
 			res = print_linkinfo(n, stdout);
-		if (res >= 0 && filter.family != AF_PACKET)
-			print_selected_addrinfo(ifi, ainfo->head, stdout);
-		if (res > 0 && !do_link && show_stats)
+		}
+
+		if (res >= 0 && filter.family != AF_PACKET) {
+			// address情報を表示
+			/* print_selected_addrinfo(
+			/* 						struct ifinfomsg *ifi,
+			/* 						struct nlmsg_list *ainfo,
+			/* 						FILE *fp
+			/* 						)
+			*/
+			/* print_selected_addrinfo(ifi, ainfo->head, stdout); */
+		}
+		if (res > 0 && !do_link && show_stats) {
+			// link statsを表示 (-sオプションの場合のみ)
 			print_link_stats(stdout, n);
+		}
+
 		close_json_object();
 	}
 	fflush(stdout);
@@ -2612,8 +2693,11 @@ static int ipaddr_modify(int cmd, int flags, int argc, char **argv)
 
 int do_ipaddr(int argc, char **argv)
 {
-	if (argc < 1)
+	if (argc < 1) {
+		// 通常の出力(ip aの結果)はこれ。
+		printf("no args\n");
 		return ipaddr_list_flush_or_save(0, NULL, IPADD_LIST);
+	}
 	if (matches(*argv, "add") == 0)
 		return ipaddr_modify(RTM_NEWADDR, NLM_F_CREATE|NLM_F_EXCL, argc-1, argv+1);
 	if (matches(*argv, "change") == 0 ||
@@ -2625,7 +2709,13 @@ int do_ipaddr(int argc, char **argv)
 		return ipaddr_modify(RTM_DELADDR, 0, argc-1, argv+1);
 	if (matches(*argv, "list") == 0 || matches(*argv, "show") == 0
 	    || matches(*argv, "lst") == 0)
-		return ipaddr_list_flush_or_save(argc-1, argv+1, IPADD_LIST);
+		{
+			// ip a listの結果出力はこれ。
+			printf("list\n");
+			printf("show\n");
+			printf("lst\n");
+			return ipaddr_list_flush_or_save(argc-1, argv+1, IPADD_LIST);
+		}
 	if (matches(*argv, "flush") == 0)
 		return ipaddr_list_flush_or_save(argc-1, argv+1, IPADD_FLUSH);
 	if (matches(*argv, "save") == 0)

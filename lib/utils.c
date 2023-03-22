@@ -847,8 +847,12 @@ const char *get_ifname_rta(int ifindex, const struct rtattr *rta)
 	const char *name;
 
 	if (rta) {
+		printf("get if name by rta\n");
+		// ここで名前取得してる。
 		name = rta_getattr_str(rta);
+		/* printf("rta_getattr_str(rta) %s\n", name); */
 	} else {
+		printf("no rta\n");
 		fprintf(stderr,
 			"BUG: device with ifindex %d has nil ifname\n",
 			ifindex);
@@ -1238,11 +1242,20 @@ int print_timestamp(FILE *fp)
 	return 0;
 }
 
+// 表示の一行目の（if index以外の）項目
+// 具体的には以下のような項目を表示
+// ens3:
+// br-44f4a6c19716:
+// veth622a1de@if26:
+
+// <BROADCAST,MULTICAST,UP,LOWER_UP>
+// <NO-CARRIER,BROADCAST,MULTICAST,UP>の部分。
 unsigned int print_name_and_link(const char *fmt,
 				 const char *name, struct rtattr *tb[])
 {
 	const char *link = NULL;
 	unsigned int m_flag = 0;
+
 	SPRINT_BUF(b1);
 
 	if (tb[IFLA_LINK]) {
@@ -1276,11 +1289,13 @@ unsigned int print_name_and_link(const char *fmt,
 		}
 
 		if (link) {
+			printf("if link exist\n");
 			snprintf(b1, sizeof(b1), "%s@%s", name, link);
 			name = b1;
 		}
 	}
 
+	// ここで実際にifnameを表示している。
 	print_color_string(PRINT_ANY, COLOR_IFNAME, "ifname", fmt, name);
 
 	return m_flag;

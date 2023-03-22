@@ -137,12 +137,15 @@ static void set_color_palette(void)
 __attribute__((format(printf, 3, 4)))
 int color_fprintf(FILE *fp, enum color_attr attr, const char *fmt, ...)
 {
+	// printf("\nint color_fprintf()");
 	int ret = 0;
 	va_list args;
 
 	va_start(args, fmt);
 
 	if (!color_is_enabled || attr == COLOR_NONE) {
+		// ここが呼ばれる。
+		// printf("COLOR_NONE\n");
 		ret = vfprintf(fp, fmt, args);
 		goto end;
 	}

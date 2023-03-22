@@ -87,7 +87,7 @@ static const struct cmd {
 	const char *cmd;
 	int (*func)(int argc, char **argv);
 } cmds[] = {
-	{ "address",	do_ipaddr },
+	{ "address",	do_ipaddr }, // ip aの場合は、do_ipaddr()が実行される。
 	{ "addrlabel",	do_ipaddrlabel },
 	{ "maddress",	do_multiaddr },
 	{ "route",	do_iproute },
@@ -126,11 +126,13 @@ static const struct cmd {
 
 static int do_cmd(const char *argv0, int argc, char **argv, bool final)
 {
+	// cmdは固定の構造体
 	const struct cmd *c;
 
+	// argv0をcmd構造体と比較。
 	for (c = cmds; c->cmd; ++c) {
-		if (matches(argv0, c->cmd) == 0)
-			return -(c->func(argc-1, argv+1));
+		if (matches(argv0, c->cmd) == 0) // argv0とマッチすれば、
+			return -(c->func(argc-1, argv+1)); // そのcmdのfuncを実行する。そのままreturnする。
 	}
 
 	if (final)
